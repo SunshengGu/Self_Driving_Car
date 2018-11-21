@@ -72,6 +72,8 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
   for (int i = 0; i < num_particles; i++){
     // Update based on measurements
     // Use the constant yaw rate formula for small yaw rate to save time
+	  
+    // Source for the following if statement: https://github.com/jeremy-shannon/CarND-Kidnapped-Vehicle-Project/blob/master/src/particle_filter.cpp
     if (fabs(yaw_rate) < 0.0001) {  
       particles[i].x += velocity * delta_t * cos(particles[i].theta);
       particles[i].y += velocity * delta_t * sin(particles[i].theta);
