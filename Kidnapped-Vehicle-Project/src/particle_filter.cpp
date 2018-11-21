@@ -139,6 +139,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
   
+  // I studied code from the following source, but the updateWeights function itself is entirely my own work:
+  // https://github.com/jeremy-shannon/CarND-Kidnapped-Vehicle-Project/blob/master/src/particle_filter.cpp
   // Loop through each particle
   for (unsigned int i = 0; i < num_particles; i++){
     // Get the x, y, and orientation for each particle
@@ -213,7 +215,9 @@ void ParticleFilter::resample() {
 	// TODO: Resample particles with replacement with probability proportional to their weight. 
 	// NOTE: You may find std::discrete_distribution helpful here.
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
-  
+	
+  // I used code from the following source to understand how to use a discrete distribution in C++, but I made some changes:
+  // https://github.com/mvirgo/Kidnapped-Vehicle-Project/blob/master/src/particle_filter.cpp
   // Initialize a new particle list
   vector<Particle> p2;
   
