@@ -20,8 +20,9 @@
 using namespace std;
 
 // declare a random engine
-random_device rd;
-static default_random_engine gen(rd());
+// random_device rd;
+// static default_random_engine gen(rd());
+static default_random_engine gen;
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// TODO: Set the number of particles. Initialize all particles to first position (based on estimates of 
@@ -30,10 +31,10 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
   
   // Set number of particles
-  int num_particles = 100;
+  num_particles = 100;
     
   // Resize the particles vector
-  particles.resize(num_particles);
+  // particles.resize(num_particles);
   
   // Resize the weights vector
   weights.resize(num_particles);
@@ -49,6 +50,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
     p.y = y + y_uncertainty(gen);
     p.theta = theta + theta_uncertainty(gen);
     p.weight = 1.0;
+    weights[i] = p.weight;
     particles.push_back(p);
   }
   
@@ -99,7 +101,7 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
     // Get the current observation
     LandmarkObs obs = observations[i];
 
-    // Initialize minimum distance to infinity
+    // Initialize minimum distance to a very large number
     double min_dist = numeric_limits<double>::max();
     
     // Initialize the landmark id
@@ -177,8 +179,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     // Perform data association
     dataAssociation(valid_lm, t_obs);
     
-    // Initialize particle weight
+    // Initialize particle weight and the temporary weight variable
     particles[i].weight = 1.0;
+    //double weight = 1.0;
     
     // Loop through each observation to update particle weight
     for (unsigned int m = 0; m < t_obs.size(); m++){
@@ -192,14 +195,16 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         if (t_obs[m].id == valid_lm[n].id){
           mu_x = valid_lm[n].x;
           mu_y = valid_lm[n].y;
-          exponent = pow((obs_x - mu_x), 2.0)/(2.0 * pow(sig_x, 2.0)) + pow((obs_y - mu_y), 2.0)/(2.0 * pow(sig_y, 2.0));
-          weight *= gauss_norm * exp(-exponent);
         }
       }
-      particles[i].weight = weight;
+      exponent = pow((obs_x - mu_x), 2.0)/(2.0 * pow(sig_x, 2.0)) + pow((obs_y - mu_y), 2.0)/(2.0 * pow(sig_y, 2.0));
+      particles[i].weight *= gauss_norm * exp(-exponent);
+      //particles[i].weight = weight;
     }
     weights[i] = particles[i].weight;
+    //cout << weights[i] << endl;
   }
+  cout << weights[2] << endl;
 }
 
 void ParticleFilter::resample() {
@@ -209,16 +214,10 @@ void ParticleFilter::resample() {
   
   // Initialize a new particle list
   vector<Particle> p2;
-  //vector<double> weights;
-  
-  // Put the weight values into the distribution vector
-  //for (unsigned int i = 0; i < num_particles; i++){
-    //weights.push_back(particles[i].weight);
-  //}
   
   // Define generator and distribution
-  random_device rd;
-  default_random_engine generator(rd());
+  // random_device rd;
+  default_random_engine generator;
   discrete_distribution<int> distribution(weights.begin(), weights.end());
   
   // Perform resampling
@@ -228,40 +227,6 @@ void ParticleFilter::resample() {
   
   // Update particle list
   particles = p2;
-  
-  /*
-  vector<Particle> new_particles;
-
-  // get all of the current weights
-  vector<double> weights;
-  for (int i = 0; i < num_particles; i++) {
-    weights.push_back(particles[i].weight);
-  }
-
-  // generate random starting index for resampling wheel
-  uniform_int_distribution<int> uniintdist(0, num_particles-1);
-  auto index = uniintdist(gen);
-
-  // get max weight
-  double max_weight = *max_element(weights.begin(), weights.end());
-
-  // uniform random distribution [0.0, max_weight)
-  uniform_real_distribution<double> unirealdist(0.0, max_weight);
-
-  double beta = 0.0;
-
-  // spin the resample wheel!
-  for (int i = 0; i < num_particles; i++) {
-    beta += unirealdist(gen) * 2.0;
-    while (beta > weights[index]) {
-      beta -= weights[index];
-      index = (index + 1) % num_particles;
-    }
-    new_particles.push_back(particles[index]);
-  }
-
-  particles = new_particles;
-  */
 }
 
 Particle ParticleFilter::SetAssociations(Particle& particle, const std::vector<int>& associations, 
