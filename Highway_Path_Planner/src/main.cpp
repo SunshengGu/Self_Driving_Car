@@ -214,24 +214,27 @@ int getLane(double d) {
 
 
 // Finite state machine functions
-int chooseNextLane(int lane_num, double ego_vehicle_s, vector<vector<double>> sensor_data);
+int chooseNextLane(int lane_num, double ego_vehicle_s, double ego_vehicle_speed, vector<vector<double>> sensor_data);
 vector<int> getLaneOptions(int lane_num);
-int getFastestLane (vector<int> lane_options, vector<vector<double>> sensor_data);
-double getLaneSpeed (int lane_num, vector<vector<double>> sensor_data);
+int getFastestLane (vector<int> lane_options, double ego_vehicle_s, vector<vector<double>> sensor_data);
+double getLaneSpeed (int lane_num, double ego_vehicle_s, vector<vector<double>> sensor_data);
 vector<double> getClosestVehicle(int lane_num, double ego_vehicle_s, vector<vector<double>> sensor_data);
 
 // Cost functionS
-double cost(int original_lane, int intended_lane, double ego_vehicle_s, vector<vector<double>> sensor_data);
+double cost(int original_lane, int intended_lane, double ego_vehicle_s, double ego_vehicle_speed, vector<vector<double>> sensor_data);
 //double goalDistanceCost(int original_lane, int intended_lane);
 double inefficiencyCost(double goal_speed, double lane_speed);
-double collisionCost(int intended_lane, double ego_vehicle_s, vector<vector<double>> sensor_data);
+double collisionCost(int intended_lane, double ego_vehicle_s, double ego_vehicle_speed, vector<vector<double>> sensor_data);
 
 // Select the best next lane based on cost function results
-int chooseNextLane(int lane_num, double ego_vehicle_s, vector<vector<double>> sensor_data) {
+int chooseNextLane(int lane_num, double ego_vehicle_s, double ego_vehicle_speed, vector<vector<double>> sensor_data) {
   vector<int> lane_options = getLaneOptions(lane_num);
+  
+  //std::cout << "ego_vehciel_speed: " + to_string(ego_vehicle_speed) << endl;
   
   // Initialize the minimum cost to be a large number
   double min_cost = 10000.0;
+  double cost_thresh = 0.8; 
   double cost_i, current_lane_cost;
   
   /*
@@ -239,17 +242,20 @@ int chooseNextLane(int lane_num, double ego_vehicle_s, vector<vector<double>> se
   fastest_lane is the lane with the fastest traffic
   */
   int intended_lane, next_lane, fastest_lane;
-  intended_lane = getFastestLane(lane_options, sensor_data); // Consider only the immediately reachable lanes
-  fastest_lane = getFastestLane({0, 1, 2}, sensor_data); // Consider all lanes
+  intended_lane = getFastestLane(lane_options, ego_vehicle_s, sensor_data); // Consider only the immediately reachable lanes
+  next_lane = lane_num; // Keep lane is the default next state
+  fastest_lane = getFastestLane({0, 1, 2}, ego_vehicle_s, sensor_data); // Consider all lanes
   
   double current_lane_speed, fastest_lane_speed, middle_lane_speed;
-  current_lane_speed = getLaneSpeed(lane_num, sensor_data);
-  fastest_lane_speed = getLaneSpeed(fastest_lane, sensor_data);
-  middle_lane_speed = getLaneSpeed(1, sensor_data);
+  current_lane_speed = getLaneSpeed(lane_num, ego_vehicle_s, sensor_data);
+  fastest_lane_speed = getLaneSpeed(fastest_lane, ego_vehicle_s, sensor_data);
+  middle_lane_speed = getLaneSpeed(1, ego_vehicle_s, sensor_data);
+  
+  //std::cout << "fastest_lane_speed: " + to_string(fastest_lane_speed) << endl;
   
   // Choose the lane with the smallest cost as the next lane
   for (int i = 0; i < lane_options.size(); i++) {
-    cost_i = cost(lane_num, lane_options[i], ego_vehicle_s, sensor_data);
+    cost_i = cost(lane_num, lane_options[i], ego_vehicle_s, ego_vehicle_speed, sensor_data);
     /*
     if (lane_options[i] = lane_num) {
       current_lane_cost = cost_i;
@@ -258,6 +264,10 @@ int chooseNextLane(int lane_num, double ego_vehicle_s, vector<vector<double>> se
       min_cost = cost_i;
       next_lane = lane_options[i];
     }
+  }
+  // If even the minimum cost exceeds the threshold, keep lane to avoid collisions
+  if (min_cost > cost_thresh) {
+    next_lane = lane_num;
   }
   
   vector<double> distances = getClosestVehicle(fastest_lane, ego_vehicle_s, sensor_data);
@@ -270,10 +280,10 @@ int chooseNextLane(int lane_num, double ego_vehicle_s, vector<vector<double>> se
   if ((fastest_lane == lane_num - 2) || (fastest_lane == lane_num + 2)) {
     /* Only consider lane change if the fastest lane is significantly faster or has far less traffic than the 
     current lane, and the middle lane is not too much slower */
-    if ((fastest_lane_speed > current_lane_speed + 10)  || (dist_s_front > 40 && dist_s_rear > 40)) {
+    if ((fastest_lane_speed > current_lane_speed + 10)  || (dist_s_front > 40 && dist_s_rear > 15)) {
       if (middle_lane_speed > current_lane_speed - 5) {
         // Ignore inefficiency cost, consider collision cost only
-        if (collisionCost(1, ego_vehicle_s, sensor_data) < 0.1) {
+        if (collisionCost(1, ego_vehicle_s, ego_vehicle_speed, sensor_data) < 0.4) {
           next_lane = 1; // Shift to the middle lane if unlikely to collide
         }
       }
@@ -294,7 +304,7 @@ vector<int> getLaneOptions(int lane_num) {
   return lane_options;
 }
 // Find the fastest reachable lane
-int getFastestLane (vector<int> lane_options, vector<vector<double>> sensor_data) {
+int getFastestLane (vector<int> lane_options, double ego_vehicle_s, vector<vector<double>> sensor_data) {
   // intended_lane is the fastest adjacent lane
   int intended_lane;
   
@@ -303,7 +313,7 @@ int getFastestLane (vector<int> lane_options, vector<vector<double>> sensor_data
   double vel_i;
   for (int i = 0; i < lane_options.size(); i++) {
     // Get the velocity of car in each lane
-    vel_i = getLaneSpeed(lane_options[i], sensor_data);
+    vel_i = getLaneSpeed(lane_options[i], ego_vehicle_s, sensor_data);
     if (vel_i < min_vel) {
       min_vel = vel_i;
       intended_lane = lane_options[i];
@@ -312,22 +322,28 @@ int getFastestLane (vector<int> lane_options, vector<vector<double>> sensor_data
   return intended_lane;
 }
 
-// Get the average speed of vehicles in a particular lane
-double getLaneSpeed (int lane_num, vector<vector<double>> sensor_data) {
+// Get the average speed of vehicles in a particular lane in mph
+double getLaneSpeed (int lane_num, double ego_vehicle_s, vector<vector<double>> sensor_data) {
   int vehicle_counter = 0; // Count number of cars sensed in the lane
   double speed_sum = 0.0; // Summing speed values of sensed vehicles in the lane
   double lane_speed = 49.5; // If no vehicle sensed, then use target speed as the lane speed
   bool car_sensed = false;
+  double dist_s; // Distance between the observed car and the ego vehicle in the s direction
+  int car_lane; // Lane where the observed car is in
+  
   for (int i = 0; i < sensor_data.size(); i++) {
-    int car_lane = getLane(sensor_data[i][6]);
-    if (car_lane == lane_num) {
+    car_lane = getLane(sensor_data[i][6]);
+    dist_s = sensor_data[i][5] - ego_vehicle_s;
+    /* Any cars more than 10 meters behind or more than 50 meters in front of the ego vehicle are 
+    considered to be irrelevant in calculating lane speed */
+    if (car_lane == lane_num && dist_s > -10.0 && dist_s < 50.0) {
       speed_sum += sqrt(pow(sensor_data[i][3], 2.0) + pow(sensor_data[i][4], 2.0));
       vehicle_counter ++;
       car_sensed = true;
     }
   }
   if (car_sensed) {
-    lane_speed = speed_sum/vehicle_counter;
+    lane_speed = speed_sum/vehicle_counter*2.24; // Returns average speed of cars in mph
   }
   return lane_speed;
 }
@@ -364,14 +380,14 @@ vector<double> getClosestVehicle (int lane_num, double ego_vehicle_s, vector<vec
   return {dist_s_front, dist_s_rear};
 }
 
-double cost(int original_lane, int intended_lane, double ego_vehicle_s, vector<vector<double>> sensor_data) {
+double cost(int original_lane, int intended_lane, double ego_vehicle_s, double ego_vehicle_speed, vector<vector<double>> sensor_data) {
   // TODO: implement collision cost and inefficiency cost
   // Can imitate provided code for collision cost
   double total_cost = 0.0;
-  double lane_speed = getLaneSpeed(intended_lane, sensor_data);
+  double lane_speed = getLaneSpeed(intended_lane, ego_vehicle_s, sensor_data);
   
   total_cost += inefficiencyCost(49.5, lane_speed);
-  total_cost += collisionCost(intended_lane, ego_vehicle_s, sensor_data);
+  total_cost += collisionCost(intended_lane, ego_vehicle_s, ego_vehicle_speed, sensor_data);
   //double gd_cost = goal_distance_cost(original_lane, intended_lane);
   return total_cost;
 }
@@ -397,7 +413,7 @@ double inefficiencyCost(double goal_speed, double lane_speed) {
     return cost;
 }
 
-double collisionCost(int intended_lane, double ego_vehicle_s, vector<vector<double>> sensor_data) {
+double collisionCost(int intended_lane, double ego_vehicle_s, double ego_vehicle_speed, vector<vector<double>> sensor_data) {
   /*
   Cost becomes higher if there's a car in the intended lane very close to the ego vehicle in the s direction
   */
@@ -408,11 +424,13 @@ double collisionCost(int intended_lane, double ego_vehicle_s, vector<vector<doub
   for (int i = 0; i < sensor_data.size(); i++) {
     car_lane = getLane(sensor_data[i][6]); // determine which lane the observed vehicle is in
     if (car_lane == intended_lane) {
-      car_speed = sqrt(pow(sensor_data[i][3], 2.0) + pow(sensor_data[i][4], 2.0))/2.24;
+      car_speed = sqrt(pow(sensor_data[i][3], 2.0) + pow(sensor_data[i][4], 2.0));
       // Assuming it takes 1 sec to complete a lane change, then this would be the car's position after 1 sec
       car_s = sensor_data[i][5] + car_speed; 
+      //ego_vehicle_s += (ego_vehicle_speed/2.24)/2; // Rough estimate of ego vehicle's s position in meters after 1 s
       // The closer the car is to the ego vehicle, the higher the cost
-      cost += 12 * pow((car_s - ego_vehicle_s), -2.0);
+      cost += 20 * pow((car_s - ego_vehicle_s), -2.0);
+      // cost += 5 * exp(-0.3 * (car_s - ego_vehicle_s));
       //cost += 3 / abs(car_s - ego_vehicle_s); 
     }
   }
@@ -533,7 +551,7 @@ int main() {
                   //ref_vel = 29.5;
                   too_close = true;
                   //int current_lane = lane;
-                  lane = chooseNextLane(lane, car_s, sensor_fusion);
+                  lane = chooseNextLane(lane, car_s, car_speed, sensor_fusion);
                   //lane = 0;
                 } 
                 /*
