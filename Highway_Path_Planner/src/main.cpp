@@ -134,42 +134,6 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 	return {frenet_s,frenet_d};
 
 }
-/*
-// Transform from Cartesian x,y coordinates to Frenet s coordinate for non-ego vehicles
-double getFrenet_non_ego(double x, double y, int next_wp, const vector<double> &maps_x, const vector<double> &maps_y)
-{
-    int prev_wp;
-	prev_wp = next_wp-1;
-	if(next_wp == 0)
-	{
-		prev_wp  = maps_x.size()-1;
-	}
-
-	double n_x = maps_x[next_wp]-maps_x[prev_wp];
-	double n_y = maps_y[next_wp]-maps_y[prev_wp];
-	double x_x = x - maps_x[prev_wp];
-	double x_y = y - maps_y[prev_wp];
-
-	// find the projection of x and y onto n
-	double proj_norm = (x_x*n_x+x_y*n_y)/(n_x*n_x+n_y*n_y);
-	double proj_x = proj_norm*n_x;
-	double proj_y = proj_norm*n_y;
-
-	double frenet_d = distance(x_x,x_y,proj_x,proj_y);
-
-	//see if d value is positive or negative by comparing it to a center point
-
-	double center_x = 1000-maps_x[prev_wp];
-	double center_y = 2000-maps_y[prev_wp];
-	double centerToPos = distance(center_x,center_y,x_x,x_y);
-	double centerToRef = distance(center_x,center_y,proj_x,proj_y);
-
-	// calculate s value
-	double frenet_s = s + distance(0,0,proj_x,proj_y);
-
-	return frenet_s;
-}
-*/
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
 vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
@@ -388,22 +352,9 @@ double cost(int original_lane, int intended_lane, double ego_vehicle_s, double e
   
   total_cost += inefficiencyCost(49.5, lane_speed);
   total_cost += collisionCost(intended_lane, ego_vehicle_s, ego_vehicle_speed, sensor_data);
-  //double gd_cost = goal_distance_cost(original_lane, intended_lane);
   return total_cost;
 }
 
-/*
-double goalDistanceCost(int original_lane, int intended_lane) {
-  double gd_cost;
-  // Consider only shifting one lane
-  if (original_lane == intended_lane) {
-    gd_cost = 0.0;
-  } else {
-    gd_cost = 1 - exp(-4.0/30.0); // Set 30.0m as delta s since waypoint distance is 30.0m
-  }
-  return gd_cost;
-}
-*/
 double inefficiencyCost(double goal_speed, double lane_speed) {
     /*
     Cost becomes higher for trajectories with intended lane's speed (lane_speed) slower than vehicle's target speed (goal_speed). 
@@ -427,9 +378,8 @@ double collisionCost(int intended_lane, double ego_vehicle_s, double ego_vehicle
       car_speed = sqrt(pow(sensor_data[i][3], 2.0) + pow(sensor_data[i][4], 2.0));
       // Assuming it takes 1 sec to complete a lane change, then this would be the car's position after 1 sec
       car_s = sensor_data[i][5] + car_speed; 
-      //ego_vehicle_s += (ego_vehicle_speed/2.24)/2; // Rough estimate of ego vehicle's s position in meters after 1 s
       // The closer the car is to the ego vehicle, the higher the cost
-      cost += 20 * pow((car_s - ego_vehicle_s), -2.0);
+      cost += 40 * pow((car_s - ego_vehicle_s), -2.0);
       // cost += 5 * exp(-0.3 * (car_s - ego_vehicle_s));
       //cost += 3 / abs(car_s - ego_vehicle_s); 
     }
@@ -513,14 +463,6 @@ int main() {
           	// Previous path's end s and d values 
           	double end_path_s = j[1]["end_path_s"];
           	double end_path_d = j[1]["end_path_d"];
-          	/*
-          	Vehicle ego;
-          	ego.lane = getLane(car_d);
-          	ego.s = car_s;
-          	ego.v = car_speed;
-          	ego.a = 0; // Initialize acceleration as 0
-          	ego.state = "KL"; // Initialize state as keep lane
-          	*/
 
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];
@@ -554,21 +496,8 @@ int main() {
                   lane = chooseNextLane(lane, car_s, car_speed, sensor_fusion);
                   //lane = 0;
                 } 
-                /*
-                // If the check_car is within 20 meters to the rear and no car within 30 meters in front, speed up
-                else if (car_s > check_car_s && (car_s - check_car_s) < 20 && not too_close) {
-                  rear_too_close = true;
-                }*/
               }
             }
-          /*
-          	// Reduce speed if too close, add if no longer close
-          	if (too_close) {
-              ref_vel -= .224;
-            } else if (ref_vel < 49.5) {
-              ref_vel += .224;
-            }
-          */
 
           	std::cout << "too_close is: " + to_string(too_close) << endl;
           	json msgJson;
@@ -608,9 +537,9 @@ int main() {
             }
           
           	// Add evenly 30m spaced points ahead of the starting reference
-          	vector<double> next_wp0 = getXY(car_s+30, 2+4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-          	vector<double> next_wp1 = getXY(car_s+60, 2+4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-          	vector<double> next_wp2 = getXY(car_s+90, 2+4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          	vector<double> next_wp0 = getXY(car_s+40, 2+4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          	vector<double> next_wp1 = getXY(car_s+70, 2+4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          	vector<double> next_wp2 = getXY(car_s+100, 2+4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
           	ptsx.push_back(next_wp0[0]);
           	ptsx.push_back(next_wp1[0]);
           	ptsx.push_back(next_wp2[0]);
@@ -647,14 +576,10 @@ int main() {
           	for (int i = 1; i <= 50-previous_path_x.size(); i++) {
               // Reduce speed if too close, add if no longer close
               if (too_close) {
-                ref_vel -= .15;
+                ref_vel -= .224;
               } else if (ref_vel < 49.5) {
-                ref_vel += .224;
+                ref_vel += .112;
               }
-              /*
-              if (rear_too_close) {
-                ref_vel += .224;
-              }*/
               
               double N = (target_dist/(0.02*ref_vel/2.24));
               double x_point = x_add_on + target_x/N;
@@ -675,15 +600,7 @@ int main() {
               next_x_vals.push_back(x_point);
               next_y_vals.push_back(y_point);
             }
-
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-            // double dist_inc = 0.5;
-          	/*
-            for(int i = 0; i < 50; i++)
-            {
-                  next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
-                  next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
-            } */
+          
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
             
