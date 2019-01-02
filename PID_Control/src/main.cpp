@@ -1,9 +1,7 @@
 #include <uWS/uWS.h>
-#include <iostream>
 #include "json.hpp"
 #include "PID.h"
-#include <string>
-#include <vector>
+#include <math.h>
 
 // for convenience
 using json = nlohmann::json;
@@ -34,28 +32,13 @@ int main()
   uWS::Hub h;
 
   PID pid;
-  // TODO: Initialize the pid variable.
-  pid.Init(0.0, 0.0, 0.0);
-  vector<double> dp = {1.0, 1.0, 1.0};
-  // Stop twiddling if the sum of dp values are less than 0.001
-  double tol = 0.001;
-  // Increase by 1 for each motion step
-  int steps = 1;
-  // Initialize best_err and the sum of square of total error over 100 steps
-  double best_err = 100.0;
-  double sum_square_error = 0.0;
-  // Indicates weather control parameter change successfully reduced error in the previous 100 steps
-  vector<bool> success = {true, true, true};
+  // TODO: Initialize the pid variable。
+  pid.Init(0.071636, 0.0013309, 0.96628);
 
-  h.onMessage([&pid, &dp, &tol, &steps, &best_err, &sum_square_error, &success](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
-    steps++;
-    // Reset to zero if reached 100 steps
-    if (steps == 100) {
-      steps = 1;
-    }
     if (length && length > 2 && data[0] == '4' && data[1] == '2')
     {
       auto s = hasData(std::string(data).substr(0, length));
@@ -74,92 +57,32 @@ int main()
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
+          
           pid.UpdateError(cte);
           steer_value = pid.TotalError();
           
-          // Twiddle
-          double sum_dp = dp[0] + dp[1] + dp[2];
-          vector<double> controls = {pid.Kp, pid.Ki, pid.Kd};
+          // keep absolute value of steering value below 1.0
+          if (steer_value > 1.0) {
+            steer_value = 1.0;
+          } else if (steer_value < -1.0) {
+            steer_value = -1.0;
+          }
           
+          double sum_dp = pid.dp[0] + pid.dp[1] + pid.dp[2];
+          /* To twiddle, uncomment the code below
+          // keep twiddling as long as the sum of dp values are below the threshold
+          if (sum_dp > pid.thresh) {
+            pid.twiddle();
+            pid.output_param();
+          }*/
+          //pid.steps == pid.twiddle_cycle - 1
           
-          if (sum_dp < tol ) {
-            for (int i = 0; i < controls.size(); i++) {
-              // Update control parameters every 100 steps
-              if (success[i]) {
-                if (steps == 1) {
-                  // Increase the i'th parameter only if error was successfuly reduced in the previous 100 steps
-                  controls[i] += dp[i];
-                  pid.assign_control_param(i, controls[i]);
-                  // Re-initialize the sum of square error to zero
-                  sum_square_error = 0.0;
-                } 
-                // Update parameters at the 100's step
-                else if (steps == 100) {
-                  sum_square_error += pow(steer_value, 2.0);
-                  if (sum_square_error < best_err) {
-                    success[i] = true;
-                    best_err = sum_square_error;
-                    dp[i] *= 1.1;
-                  } else {
-                    success[i] = false;
-                    controls[i] -= 2*dp[i];
-                    pid.assign_control_param(i, controls[i]);
-                  }
-                } else {
-                  sum_square_error += pow(steer_value, 2.0);
-                }
-              }
-              // If error was not successfully reduced
-              else {
-                if (steps == 1) {
-                  // Re-initialize the sum of square error to zero
-                  sum_square_error = 0.0;
-                } else if (steps == 100) {
-                  sum_square_error += pow(steer_value, 2.0);
-                  if (sum_square_error < best_err) {
-                    best_err = sum_square_error;
-                    dp[i] *= 1.1;
-                  } else {
-                    controls[i] += dp[i];
-                    dp[i] *= 0.9;
-                  }
-                } else {
-                  sum_square_error += pow(steer_value, 2.0);
-                }
-              }
-              
-              /*
-              if (steps == 1) {
-                // Increase the i'th parameter only if error was successfuly reduced in the previous 100 steps
-                if (success){
-                  controls[i] += dp[i];
-                  pid.assign_control_param(i, controls[i]);
-                }
-                // Re-initialize the sum of square error to zero
-                sum_square_error = 0.0;
-              } 
-              // Update parameters at the 100's step
-              else if (steps == 100) {
-                sum_square_error += pow(pid.TotalError, 2.0);
-                if (sum_square_error < best_err) {
-                  success = true;
-                  best_err = sum_square_error;
-                  dp[i] *= 1.1;
-                } else {
-                  success = false;
-                  controls[i] -= 2*dp[i];
-                  pid.assign_control_param(i, controls[i]);
-                }
-              } else {
-                sum_square_error += pow(pid.TotalError, 2.0);
-              }
-              */
           // DEBUG
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = 0.5;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
