@@ -72,6 +72,7 @@ void PID::assign_control_param(int index, double value) {
 void PID::twiddle() {
   // looping through each control parameter
   for (int i = 0; i < controls.size(); i++) {
+    // for debugging: to see if the second and third loop were reached
     if (i==1) {
       cout << "1" << endl;
     } else if (i==2) {
