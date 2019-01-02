@@ -1,6 +1,8 @@
 ## Effect of P I D Components
 The P component opposes the CTE directly. If the car drifts away from the center of the lane, it tries to steer the car back to the the center of the lane. But the P term has the tendency of over-correcting the CTE and generates CTE in the opposite direction. I played around with the Kp value, and when this coefficient is larger, the car tend to swerve around more. The CTE eventually diverges and the car eventually drove off the road.
+
 The D term helps solve the over-correcting problem of the P term. The D term is a function of the difference between the current and previous CTE. So if the CTE is decreasing, the D term will try to steer the car in the opposite direction as the P term does, thus reducing oscillation. I observed that as Kd got larger, oscillation was less severe.
+
 The I term helps reducing accumulative error, since it is a function of the sum of CTE. One thing worth noting is that Ki must be much smaller than Kd and Kp, because the error term for Ki is relatively large. When I initiated Ki as 0.1, the car drove off the track pretty quickly. 
 
 ## Choice of Hyperparameters
